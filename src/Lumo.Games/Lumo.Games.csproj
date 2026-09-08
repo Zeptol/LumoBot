@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Lumo.Domain/Lumo.Domain.csproj" />
+    <ProjectReference Include="../Lumo.Application/Lumo.Application.csproj" />
+  </ItemGroup>
+</Project>
