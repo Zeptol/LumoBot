@@ -427,7 +427,7 @@ public sealed class SqliteLumoStore : ILumoStore
         IReadOnlyCollection<string> tags,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
 
         long entityId;
         await using (var entityCommand = connection.CreateCommand())
