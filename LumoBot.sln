@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumo.Domain", "src\Lumo.Domain\Lumo.Domain.csproj", "{ECCBF4E9-4BB4-46B5-970B-FDA7CA0C688D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumo.Application", "src\Lumo.Application\Lumo.Application.csproj", "{7A3FB1A0-42B1-4014-B62D-36791C77579C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumo.Games", "src\Lumo.Games\Lumo.Games.csproj", "{C4CDBAFC-4177-4391-A4E9-1D0F637C4BEA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumo.Infrastructure", "src\Lumo.Infrastructure\Lumo.Infrastructure.csproj", "{3E4383D9-7EAE-4955-8C7A-52706E825234}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumo.Bot.Telegram", "src\Lumo.Bot.Telegram\Lumo.Bot.Telegram.csproj", "{12B133DF-C975-4C62-9DDF-018D24C6B5E8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ECCBF4E9-4BB4-46B5-970B-FDA7CA0C688D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECCBF4E9-4BB4-46B5-970B-FDA7CA0C688D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECCBF4E9-4BB4-46B5-970B-FDA7CA0C688D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECCBF4E9-4BB4-46B5-970B-FDA7CA0C688D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A3FB1A0-42B1-4014-B62D-36791C77579C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A3FB1A0-42B1-4014-B62D-36791C77579C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A3FB1A0-42B1-4014-B62D-36791C77579C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A3FB1A0-42B1-4014-B62D-36791C77579C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4CDBAFC-4177-4391-A4E9-1D0F637C4BEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4CDBAFC-4177-4391-A4E9-1D0F637C4BEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4CDBAFC-4177-4391-A4E9-1D0F637C4BEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4CDBAFC-4177-4391-A4E9-1D0F637C4BEA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3E4383D9-7EAE-4955-8C7A-52706E825234}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3E4383D9-7EAE-4955-8C7A-52706E825234}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3E4383D9-7EAE-4955-8C7A-52706E825234}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3E4383D9-7EAE-4955-8C7A-52706E825234}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12B133DF-C975-4C62-9DDF-018D24C6B5E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12B133DF-C975-4C62-9DDF-018D24C6B5E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12B133DF-C975-4C62-9DDF-018D24C6B5E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12B133DF-C975-4C62-9DDF-018D24C6B5E8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
