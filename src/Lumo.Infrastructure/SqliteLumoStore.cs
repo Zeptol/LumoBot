@@ -47,6 +47,7 @@ public sealed class SqliteLumoStore : ILumoStore
             CREATE TABLE IF NOT EXISTS Questions (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 EntityId INTEGER NULL,
+                ExternalKey TEXT NULL,
                 GameMode INTEGER NOT NULL,
                 Prompt TEXT NOT NULL,
                 Answer TEXT NOT NULL,
@@ -94,6 +95,18 @@ public sealed class SqliteLumoStore : ILumoStore
             """;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await EnsureColumnAsync(connection, "Questions", "ExternalKey", "TEXT NULL", cancellationToken);
+
+        await using (var indexCommand = connection.CreateCommand())
+        {
+            indexCommand.CommandText = """
+                CREATE UNIQUE INDEX IF NOT EXISTS UX_Questions_GameMode_ExternalKey
+                    ON Questions(GameMode, ExternalKey)
+                    WHERE ExternalKey IS NOT NULL;
+                """;
+            await indexCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         await SeedAsync(connection, cancellationToken);
     }
 
@@ -187,6 +200,47 @@ public sealed class SqliteLumoStore : ILumoStore
             license,
             aliases,
             tags);
+    }
+
+    public async Task<long> UpsertQuestionAsync(
+        CatalogQuestionInput input,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (string.IsNullOrWhiteSpace(input.ExternalKey))
+        {
+            throw new ArgumentException("ExternalKey is required for imported questions.", nameof(input));
+        }
+
+        if (string.IsNullOrWhiteSpace(input.EntityType) ||
+            string.IsNullOrWhiteSpace(input.EntityName) ||
+            string.IsNullOrWhiteSpace(input.Answer))
+        {
+            throw new ArgumentException("EntityType, EntityName and Answer are required.", nameof(input));
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        return await UpsertQuestionAsync(connection, input, cancellationToken);
+    }
+
+    public async Task<long> GetQuestionCountAsync(
+        GameMode? gameMode = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = gameMode is null
+            ? "SELECT COUNT(*) FROM Questions WHERE Enabled = 1;"
+            : "SELECT COUNT(*) FROM Questions WHERE Enabled = 1 AND GameMode = $gameMode;";
+
+        if (gameMode is not null)
+        {
+            command.Parameters.AddWithValue("$gameMode", (int)gameMode.Value);
+        }
+
+        return Convert.ToInt64(
+            await command.ExecuteScalarAsync(cancellationToken),
+            CultureInfo.InvariantCulture);
     }
 
     public async Task<Score> AddCorrectAnswerAsync(
@@ -315,6 +369,39 @@ public sealed class SqliteLumoStore : ILumoStore
         return values;
     }
 
+    private static async Task EnsureColumnAsync(
+        SqliteConnection connection,
+        string tableName,
+        string columnName,
+        string definition,
+        CancellationToken cancellationToken)
+    {
+        await using var pragma = connection.CreateCommand();
+        pragma.CommandText = $"PRAGMA table_info({tableName});";
+
+        var exists = false;
+        await using (var reader = await pragma.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+        }
+
+        if (exists)
+        {
+            return;
+        }
+
+        await using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};";
+        await alter.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task SeedAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -330,101 +417,89 @@ public sealed class SqliteLumoStore : ILumoStore
             return;
         }
 
-        await InsertQuestionAsync(
-            connection,
-            "Idiom",
-            "画蛇添足",
-            GameMode.GuessIdiom,
-            "🀄 猜成语：比喻做了多余的事，反而不恰当。",
-            "画蛇添足",
-            1,
-            MediaKind.None,
-            null,
-            null,
-            null,
-            ["画蛇添足"],
-            ["成语", "文学"],
-            cancellationToken);
+        var seedQuestions = new CatalogQuestionInput[]
+        {
+            new(
+                "seed:idiom:画蛇添足",
+                GameMode.GuessIdiom,
+                "Idiom",
+                "画蛇添足",
+                "🀄 猜成语：比喻做了多余的事，反而不恰当。",
+                "画蛇添足",
+                1,
+                MediaKind.None,
+                null,
+                null,
+                null,
+                ["画蛇添足"],
+                ["成语", "文学"]),
+            new(
+                "seed:idiom:守株待兔",
+                GameMode.GuessIdiom,
+                "Idiom",
+                "守株待兔",
+                "🀄 猜成语：比喻不主动努力，却存侥幸心理，希望得到意外收获。",
+                "守株待兔",
+                1,
+                MediaKind.None,
+                null,
+                null,
+                null,
+                ["守株待兔"],
+                ["成语", "文学"]),
+            new(
+                "seed:movie:让子弹飞",
+                GameMode.GuessMovie,
+                "Movie",
+                "让子弹飞",
+                "🎬 猜电影：导演姜文，主演姜文、葛优、周润发，2010 年上映。",
+                "让子弹飞",
+                1,
+                MediaKind.None,
+                null,
+                null,
+                null,
+                ["Let the Bullets Fly"],
+                ["电影", "华语", "2010s"]),
+            new(
+                "seed:movie:星际穿越",
+                GameMode.GuessMovie,
+                "Movie",
+                "星际穿越",
+                "🎬 猜电影：克里斯托弗·诺兰执导，故事涉及虫洞、黑洞和跨越时间的亲情。",
+                "星际穿越",
+                1,
+                MediaKind.None,
+                null,
+                null,
+                null,
+                ["Interstellar", "星际启示录"],
+                ["电影", "科幻", "欧美", "2010s"]),
+            new(
+                "seed:image:eiffel-tower",
+                GameMode.GuessImage,
+                "Landmark",
+                "埃菲尔铁塔",
+                "🖼️ 猜图：这是哪个著名地标？",
+                "埃菲尔铁塔",
+                1,
+                MediaKind.Image,
+                "https://upload.wikimedia.org/wikipedia/commons/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg",
+                "https://commons.wikimedia.org/wiki/File:Tour_Eiffel_Wikimedia_Commons.jpg",
+                "Wikimedia Commons; verify file license before redistribution",
+                ["Eiffel Tower", "巴黎铁塔"],
+                ["地标", "法国", "巴黎", "欧洲"])
+        };
 
-        await InsertQuestionAsync(
-            connection,
-            "Idiom",
-            "守株待兔",
-            GameMode.GuessIdiom,
-            "🀄 猜成语：比喻不主动努力，却存侥幸心理，希望得到意外收获。",
-            "守株待兔",
-            1,
-            MediaKind.None,
-            null,
-            null,
-            null,
-            ["守株待兔"],
-            ["成语", "文学"],
-            cancellationToken);
-
-        await InsertQuestionAsync(
-            connection,
-            "Movie",
-            "让子弹飞",
-            GameMode.GuessMovie,
-            "🎬 猜电影：导演姜文，主演姜文、葛优、周润发，2010 年上映。",
-            "让子弹飞",
-            1,
-            MediaKind.None,
-            null,
-            null,
-            null,
-            ["Let the Bullets Fly"],
-            ["电影", "华语", "2010s"],
-            cancellationToken);
-
-        await InsertQuestionAsync(
-            connection,
-            "Movie",
-            "星际穿越",
-            GameMode.GuessMovie,
-            "🎬 猜电影：克里斯托弗·诺兰执导，故事涉及虫洞、黑洞和跨越时间的亲情。",
-            "星际穿越",
-            1,
-            MediaKind.None,
-            null,
-            null,
-            null,
-            ["Interstellar", "星际启示录"],
-            ["电影", "科幻", "欧美", "2010s"],
-            cancellationToken);
-
-        await InsertQuestionAsync(
-            connection,
-            "Landmark",
-            "埃菲尔铁塔",
-            GameMode.GuessImage,
-            "🖼️ 猜图：这是哪个著名地标？",
-            "埃菲尔铁塔",
-            1,
-            MediaKind.Image,
-            "https://upload.wikimedia.org/wikipedia/commons/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg",
-            "https://commons.wikimedia.org/wiki/File:Tour_Eiffel_Wikimedia_Commons.jpg",
-            "Wikimedia Commons; verify file license before redistribution",
-            ["Eiffel Tower", "巴黎铁塔"],
-            ["地标", "法国", "巴黎", "欧洲"],
-            cancellationToken);
+        foreach (var question in seedQuestions)
+        {
+            await UpsertQuestionAsync(connection, question, cancellationToken);
+        }
     }
 
-    private static async Task InsertQuestionAsync(
+    private static async Task<long> UpsertQuestionAsync(
         SqliteConnection connection,
-        string entityType,
-        string entityName,
-        GameMode gameMode,
-        string prompt,
-        string answer,
-        int difficulty,
-        MediaKind mediaKind,
-        string? mediaUrl,
-        string? sourceUrl,
-        string? license,
-        IReadOnlyCollection<string> aliases,
-        IReadOnlyCollection<string> tags,
+        CatalogQuestionInput input,
         CancellationToken cancellationToken)
     {
         await using var transaction = connection.BeginTransaction();
@@ -434,46 +509,88 @@ public sealed class SqliteLumoStore : ILumoStore
         {
             entityCommand.Transaction = transaction;
             entityCommand.CommandText = """
-                INSERT INTO Entities (EntityType, Name)
-                VALUES ($entityType, $name)
-                ON CONFLICT(EntityType, Name) DO UPDATE SET Name = excluded.Name
+                INSERT INTO Entities (EntityType, Name, MetadataJson)
+                VALUES ($entityType, $name, $metadataJson)
+                ON CONFLICT(EntityType, Name) DO UPDATE SET
+                    MetadataJson = COALESCE(excluded.MetadataJson, Entities.MetadataJson)
                 RETURNING Id;
                 """;
-            entityCommand.Parameters.AddWithValue("$entityType", entityType);
-            entityCommand.Parameters.AddWithValue("$name", entityName);
+            entityCommand.Parameters.AddWithValue("$entityType", input.EntityType.Trim());
+            entityCommand.Parameters.AddWithValue("$name", input.EntityName.Trim());
+            entityCommand.Parameters.AddWithValue(
+                "$metadataJson",
+                (object?)input.EntityMetadataJson ?? DBNull.Value);
             entityId = Convert.ToInt64(
                 await entityCommand.ExecuteScalarAsync(cancellationToken),
                 CultureInfo.InvariantCulture);
         }
 
-        long questionId;
-        await using (var questionCommand = connection.CreateCommand())
+        long? questionId = null;
+        await using (var existingCommand = connection.CreateCommand())
         {
-            questionCommand.Transaction = transaction;
-            questionCommand.CommandText = """
+            existingCommand.Transaction = transaction;
+            existingCommand.CommandText = """
+                SELECT Id
+                FROM Questions
+                WHERE GameMode = $gameMode
+                  AND ExternalKey = $externalKey
+                LIMIT 1;
+                """;
+            existingCommand.Parameters.AddWithValue("$gameMode", (int)input.GameMode);
+            existingCommand.Parameters.AddWithValue("$externalKey", input.ExternalKey.Trim());
+            var existing = await existingCommand.ExecuteScalarAsync(cancellationToken);
+            if (existing is not null && existing is not DBNull)
+            {
+                questionId = Convert.ToInt64(existing, CultureInfo.InvariantCulture);
+            }
+        }
+
+        if (questionId is null)
+        {
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+            insertCommand.CommandText = """
                 INSERT INTO Questions (
-                    EntityId, GameMode, Prompt, Answer, Difficulty,
+                    EntityId, ExternalKey, GameMode, Prompt, Answer, Difficulty,
                     MediaKind, MediaUrl, SourceUrl, License, Enabled)
                 VALUES (
-                    $entityId, $gameMode, $prompt, $answer, $difficulty,
+                    $entityId, $externalKey, $gameMode, $prompt, $answer, $difficulty,
                     $mediaKind, $mediaUrl, $sourceUrl, $license, 1)
                 RETURNING Id;
                 """;
-            questionCommand.Parameters.AddWithValue("$entityId", entityId);
-            questionCommand.Parameters.AddWithValue("$gameMode", (int)gameMode);
-            questionCommand.Parameters.AddWithValue("$prompt", prompt);
-            questionCommand.Parameters.AddWithValue("$answer", answer);
-            questionCommand.Parameters.AddWithValue("$difficulty", difficulty);
-            questionCommand.Parameters.AddWithValue("$mediaKind", (int)mediaKind);
-            questionCommand.Parameters.AddWithValue("$mediaUrl", (object?)mediaUrl ?? DBNull.Value);
-            questionCommand.Parameters.AddWithValue("$sourceUrl", (object?)sourceUrl ?? DBNull.Value);
-            questionCommand.Parameters.AddWithValue("$license", (object?)license ?? DBNull.Value);
+            AddQuestionParameters(insertCommand, entityId, input);
             questionId = Convert.ToInt64(
-                await questionCommand.ExecuteScalarAsync(cancellationToken),
+                await insertCommand.ExecuteScalarAsync(cancellationToken),
                 CultureInfo.InvariantCulture);
         }
+        else
+        {
+            await using var updateCommand = connection.CreateCommand();
+            updateCommand.Transaction = transaction;
+            updateCommand.CommandText = """
+                UPDATE Questions SET
+                    EntityId = $entityId,
+                    Prompt = $prompt,
+                    Answer = $answer,
+                    Difficulty = $difficulty,
+                    MediaKind = $mediaKind,
+                    MediaUrl = $mediaUrl,
+                    SourceUrl = $sourceUrl,
+                    License = $license,
+                    Enabled = 1
+                WHERE Id = $questionId;
+                """;
+            AddQuestionParameters(updateCommand, entityId, input);
+            updateCommand.Parameters.AddWithValue("$questionId", questionId.Value);
+            await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
 
-        foreach (var alias in aliases.Where(value => !string.IsNullOrWhiteSpace(value)))
+        await DeleteQuestionMetadataAsync(connection, transaction, questionId.Value, cancellationToken);
+
+        foreach (var alias in input.Aliases
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Select(value => value.Trim())
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             await using var aliasCommand = connection.CreateCommand();
             aliasCommand.Transaction = transaction;
@@ -481,12 +598,15 @@ public sealed class SqliteLumoStore : ILumoStore
                 INSERT OR IGNORE INTO QuestionAliases (QuestionId, Alias)
                 VALUES ($questionId, $alias);
                 """;
-            aliasCommand.Parameters.AddWithValue("$questionId", questionId);
-            aliasCommand.Parameters.AddWithValue("$alias", alias.Trim());
+            aliasCommand.Parameters.AddWithValue("$questionId", questionId.Value);
+            aliasCommand.Parameters.AddWithValue("$alias", alias);
             await aliasCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        foreach (var tag in tags.Where(value => !string.IsNullOrWhiteSpace(value)))
+        foreach (var tag in input.Tags
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Select(value => value.Trim())
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             await using var tagCommand = connection.CreateCommand();
             tagCommand.Transaction = transaction;
@@ -494,11 +614,45 @@ public sealed class SqliteLumoStore : ILumoStore
                 INSERT OR IGNORE INTO QuestionTags (QuestionId, Tag)
                 VALUES ($questionId, $tag);
                 """;
-            tagCommand.Parameters.AddWithValue("$questionId", questionId);
-            tagCommand.Parameters.AddWithValue("$tag", tag.Trim());
+            tagCommand.Parameters.AddWithValue("$questionId", questionId.Value);
+            tagCommand.Parameters.AddWithValue("$tag", tag);
             await tagCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
+        return questionId.Value;
+    }
+
+    private static void AddQuestionParameters(
+        SqliteCommand command,
+        long entityId,
+        CatalogQuestionInput input)
+    {
+        command.Parameters.AddWithValue("$entityId", entityId);
+        command.Parameters.AddWithValue("$externalKey", input.ExternalKey.Trim());
+        command.Parameters.AddWithValue("$gameMode", (int)input.GameMode);
+        command.Parameters.AddWithValue("$prompt", input.Prompt.Trim());
+        command.Parameters.AddWithValue("$answer", input.Answer.Trim());
+        command.Parameters.AddWithValue("$difficulty", Math.Clamp(input.Difficulty, 1, 10));
+        command.Parameters.AddWithValue("$mediaKind", (int)input.MediaKind);
+        command.Parameters.AddWithValue("$mediaUrl", (object?)input.MediaUrl ?? DBNull.Value);
+        command.Parameters.AddWithValue("$sourceUrl", (object?)input.SourceUrl ?? DBNull.Value);
+        command.Parameters.AddWithValue("$license", (object?)input.License ?? DBNull.Value);
+    }
+
+    private static async Task DeleteQuestionMetadataAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        long questionId,
+        CancellationToken cancellationToken)
+    {
+        foreach (var table in new[] { "QuestionAliases", "QuestionTags" })
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"DELETE FROM {table} WHERE QuestionId = $questionId;";
+            command.Parameters.AddWithValue("$questionId", questionId);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 }
