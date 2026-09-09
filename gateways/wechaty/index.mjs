@@ -1,3 +1,5 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import qrcodeTerminal from 'qrcode-terminal'
 import { FileBox } from 'file-box'
 import { WechatyBuilder } from 'wechaty'
@@ -92,7 +94,7 @@ bot.on('message', async message => {
 async function sendAction(message, action) {
   if (action.kind === 'image' || action.kind === 'audio') {
     if (action.mediaUrl) {
-      await message.say(FileBox.fromUrl(action.mediaUrl))
+      await message.say(createMediaFileBox(action.mediaUrl))
     }
 
     if (action.text) {
@@ -105,6 +107,18 @@ async function sendAction(message, action) {
   if (action.text) {
     await message.say(action.text)
   }
+}
+
+function createMediaFileBox(mediaReference) {
+  if (/^file:\/\//i.test(mediaReference)) {
+    return FileBox.fromFile(fileURLToPath(mediaReference))
+  }
+
+  if (path.isAbsolute(mediaReference)) {
+    return FileBox.fromFile(mediaReference)
+  }
+
+  return FileBox.fromUrl(mediaReference)
 }
 
 console.log(`Connecting Wechaty gateway to ${backendUrl}`)
