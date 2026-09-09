@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../Lumo.Application/Lumo.Application.csproj" />
+    <ProjectReference Include="../Lumo.Games/Lumo.Games.csproj" />
+    <ProjectReference Include="../Lumo.Infrastructure/Lumo.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
