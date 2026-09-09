@@ -57,36 +57,58 @@ public sealed class TelegramApiClient
 
     public Task SendPhotoAsync(
         long chatId,
-        string photoUrl,
+        string photo,
+        string caption,
+        CancellationToken cancellationToken)
+        => SendMediaAsync("sendPhoto", "photo", chatId, photo, caption, cancellationToken);
+
+    public Task SendAudioAsync(
+        long chatId,
+        string audio,
+        string caption,
+        CancellationToken cancellationToken)
+        => SendMediaAsync("sendAudio", "audio", chatId, audio, caption, cancellationToken);
+
+    private Task SendMediaAsync(
+        string method,
+        string fieldName,
+        long chatId,
+        string mediaReference,
         string caption,
         CancellationToken cancellationToken)
     {
+        if (TryGetLocalFilePath(mediaReference, out var localPath))
+        {
+            return PostFileAsync(method, fieldName, chatId, localPath, caption, cancellationToken);
+        }
+
         return PostFormAsync(
-            "sendPhoto",
+            method,
             new Dictionary<string, string>
             {
                 ["chat_id"] = chatId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["photo"] = photoUrl,
+                [fieldName] = mediaReference,
                 ["caption"] = caption
             },
             cancellationToken);
     }
 
-    public Task SendAudioAsync(
+    private async Task PostFileAsync(
+        string method,
+        string fieldName,
         long chatId,
-        string audioUrl,
+        string localPath,
         string caption,
         CancellationToken cancellationToken)
     {
-        return PostFormAsync(
-            "sendAudio",
-            new Dictionary<string, string>
-            {
-                ["chat_id"] = chatId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["audio"] = audioUrl,
-                ["caption"] = caption
-            },
-            cancellationToken);
+        await using var stream = File.OpenRead(localPath);
+        using var content = new MultipartFormDataContent();
+        content.Add(
+            new StringContent(chatId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            "chat_id");
+        content.Add(new StringContent(caption), "caption");
+        content.Add(new StreamContent(stream), fieldName, Path.GetFileName(localPath));
+        await PostContentAsync(method, content, cancellationToken);
     }
 
     private async Task PostFormAsync(
@@ -95,6 +117,14 @@ public sealed class TelegramApiClient
         CancellationToken cancellationToken)
     {
         using var content = new FormUrlEncodedContent(fields);
+        await PostContentAsync(method, content, cancellationToken);
+    }
+
+    private async Task PostContentAsync(
+        string method,
+        HttpContent content,
+        CancellationToken cancellationToken)
+    {
         using var httpResponse = await _httpClient.PostAsync(method, content, cancellationToken);
         var response = await httpResponse.Content.ReadFromJsonAsync<TelegramApiResponse<JsonElement>>(
             JsonOptions,
@@ -111,6 +141,24 @@ public sealed class TelegramApiClient
             throw new InvalidOperationException(
                 $"Telegram {method} failed: {response.Description ?? httpResponse.ReasonPhrase}");
         }
+    }
+
+    private static bool TryGetLocalFilePath(string mediaReference, out string localPath)
+    {
+        localPath = string.Empty;
+        if (Uri.TryCreate(mediaReference, UriKind.Absolute, out var uri) && uri.IsFile)
+        {
+            localPath = uri.LocalPath;
+            return File.Exists(localPath);
+        }
+
+        if (!Path.IsPathFullyQualified(mediaReference) || !File.Exists(mediaReference))
+        {
+            return false;
+        }
+
+        localPath = Path.GetFullPath(mediaReference);
+        return true;
     }
 
     private static void EnsureOk(bool ok, string? description)
