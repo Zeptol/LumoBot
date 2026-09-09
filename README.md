@@ -10,6 +10,7 @@ Implemented now:
 - 🎬 Guess Movie (`/guessmovie`)
 - 🖼️ Mixed Guess Image (`/guessimage`)
 - 🀄 Guess Idiom (`/guessidiom`)
+- 🔗 Idiom Chain (`/idiomchain`) with per-chat sessions, duplicate prevention and coin rewards
 - 🪙 Coins and group leaderboard (`/coins`, `/rank`)
 - ⏱️ Per-chat 30-second rounds
 - 🏁 First-correct-answer wins under concurrent replies
@@ -35,23 +36,24 @@ Telegram ───────────────┐
                        │
 WeChat ─ Wechaty ─ HTTP┼──► ChatGameService
                        │        │
-future adapters ───────┘        ▼
-                           GameEngine
-                               │
-                      QuestionSelector
-                    weights + anti-repeat
-                               │
-                     ┌─────────┴─────────┐
-                     ▼                   ▼
-                  Catalog              Scores
-                     ▲                   │
-                     │                   │
-              Lumo.Importers             │
-        idioms / music / Wikidata        │
-      TMDB / generic JSON manifests      │
-                     └─────────┬─────────┘
-                               ▼
-                             SQLite
+future adapters ───────┘        ├──► GameEngine
+                                │      │
+                                │  QuestionSelector
+                                │ weights + anti-repeat
+                                │      │
+                                └──► IdiomChainEngine
+                                       │
+                     ┌─────────────────┴───────────────┐
+                     ▼                                 ▼
+                  Catalog                            Scores
+                     ▲                                 │
+                     │                                 │
+              Lumo.Importers                           │
+        idioms / music / Wikidata                      │
+      TMDB / generic JSON manifests                    │
+                     └─────────────────┬───────────────┘
+                                       ▼
+                                     SQLite
 ```
 
 The platform layer only translates messages and sends media. Game rules stay platform-independent.
@@ -114,7 +116,7 @@ Examples:
 dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- music `
   --root "D:\Music" --clip-count 3 --duration 8 --tags "华语,冷门"
 
-# Import an idiom JSON dataset
+# Import an idiom JSON dataset; the same Idiom entities also power Idiom Chain
 dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- idioms `
   --input "D:\datasets\idioms.json" --license "MIT"
 
@@ -168,6 +170,22 @@ $env:LUMO_WEIGHT_EXTREME="2"
 
 The SQLite candidate reader samples several ID windows instead of sorting an entire large question table with `ORDER BY RANDOM()`, so selection remains practical as the catalog grows.
 
+## Idiom Chain
+
+Send `成语接龙` or `/idiomchain` to start. Lumo chooses a four-character idiom from the imported idiom catalog. Players then reply with four Chinese characters; normal group chatter is ignored by the chain parser.
+
+Rules in the first version:
+
+- the player's first character must equal the last character of Lumo's current idiom;
+- the answer must exist in the imported Lumo idiom catalog;
+- an idiom cannot be reused in the same chain;
+- a valid player answer gives 3 coins;
+- if Lumo cannot find an unused idiom to continue, the player gets a 15-coin win bonus;
+- a chain expires after 5 minutes without a valid continuation;
+- `结束接龙` or `/stopchain` stops only the chain.
+
+Starting a normal quiz ends an active idiom chain, and starting idiom chain ends the current normal quiz round.
+
 ## Commands
 
 ```text
@@ -175,12 +193,13 @@ The SQLite candidate reader samples several ID windows instead of sorting an ent
 /guessmovie   猜电影
 /guessimage   猜图（混合题库）
 /guessidiom   猜成语
+/idiomchain   成语接龙
 /coins        金币/积分
 /rank         本群排行榜
-/stop         结束当前回合
+/stop         结束当前游戏
 ```
 
-Chinese text triggers are supported on both Telegram and WeChat: `猜歌`, `猜电影`, `猜图`, `猜成语`, `金币`, `排行榜`, `结束游戏`.
+Chinese text triggers are supported on both Telegram and WeChat: `猜歌`, `猜电影`, `猜图`, `猜成语`, `成语接龙`, `金币`, `排行榜`, `结束游戏`.
 
 ## Catalog design
 
@@ -213,7 +232,7 @@ TMDB imports movie/TV metadata and backdrops. TMDB requires attribution for deve
 3. Bulk catalog import core ✅
 4. TMDB movie / TV / variety importer ✅ initial version
 5. Weighted difficulty/popularity selection + anti-repeat ✅
-6. Idiom-chain mode
+6. Idiom-chain mode ✅ initial version
 7. Redis-backed distributed game sessions
 8. Admin UI and bulk review workflow
 9. Discord adapter (later)
