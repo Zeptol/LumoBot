@@ -26,7 +26,11 @@ var gatewayToken = Environment.GetEnvironmentVariable("LUMO_WECHAT_GATEWAY_TOKEN
 
 ILumoStore store = new SqliteLumoStore(databasePath);
 await store.InitializeAsync();
-var gameService = new ChatGameService(new GameEngine(store), store);
+var selectionOptions = QuestionSelectionOptions.FromEnvironment();
+var questionSource = new SqliteQuestionCandidateSource(databasePath);
+var gameService = new ChatGameService(
+    new GameEngine(store, questionSource, selectionOptions),
+    store);
 
 var app = builder.Build();
 
@@ -80,6 +84,7 @@ app.MapPost("/api/wechat/messages", async (
 
 Console.WriteLine($"Lumo WeChat backend listening on {bindUrl}");
 Console.WriteLine($"Database: {Path.GetFullPath(databasePath)}");
+Console.WriteLine($"Question selection: candidates={selectionOptions.CandidatePoolSize}, recentQuestions={selectionOptions.RecentQuestionLimit}, recentEntities={selectionOptions.RecentEntityLimit}");
 await app.RunAsync();
 
 static bool IsAuthorized(HttpRequest request, string? expectedToken)
