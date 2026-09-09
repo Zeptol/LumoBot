@@ -48,7 +48,7 @@ npm install
 
 The repository includes `wechaty-puppet-service`. If you choose a different direct Puppet provider, install that provider package as well and set `WECHATY_PUPPET` to its package name.
 
-## 3. Configure a Puppet Service
+## 3. Recommended route: Puppet Service
 
 Example using Wechaty Puppet Service:
 
@@ -62,6 +62,24 @@ npm start
 ```
 
 Wechaty currently lists personal-WeChat services such as Paimon and PadLocal in its Puppet Service documentation. The token identifies the underlying service, so Lumo's gateway source does not need to know whether the provider is Paimon, PadLocal or another compatible service.
+
+This is the preferred Lumo route because the game uses image and audio delivery and does not want to be tied to one desktop WeChat build.
+
+### Optional Windows-only route: Puppet XP
+
+`wechaty-puppet-xp` is a free local Windows Puppet and does not require a service token, but it is tightly coupled to specific desktop WeChat versions. At the time this integration was added, its project documents `wechaty-puppet-xp@2.1.1` for WeChat `3.9.10.27`; the compatibility table marks text send/receive as supported while newer-version media-send support is incomplete.
+
+For text-only development or experiments:
+
+```powershell
+cd gateways\wechaty
+npm install wechaty-puppet-xp@2.1.1
+$env:WECHATY_PUPPET="wechaty-puppet-xp"
+$env:LUMO_WECHAT_GATEWAY_TOKEN="replace-with-the-same-secret-as-the-dotnet-backend"
+npm start
+```
+
+Do not downgrade a main WeChat installation just for Lumo. Use a dedicated test environment if evaluating this route.
 
 ## 4. Login and test in a group
 
