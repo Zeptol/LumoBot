@@ -85,6 +85,80 @@ The importer uses Wikidata Query Service for structured entities and then resolv
 
 Wikidata/Commons data quality and media licensing still need review before public deployment. Imported license fields are there to make that review possible rather than to replace it.
 
+## TMDB movies, TV and variety shows
+
+TMDB uses a separate CLI project so the main offline importers do not require TMDB-specific options.
+
+Create a TMDB API key/read token in your TMDB account, then set the API Read Access Token:
+
+```powershell
+$env:TMDB_BEARER_TOKEN="your TMDB API Read Access Token"
+```
+
+Import movies:
+
+```powershell
+dotnet run --project src\Lumo.Importers.Tmdb\Lumo.Importers.Tmdb.csproj -- `
+  --type movie `
+  --language zh-CN `
+  --pages 5 `
+  --images-per-title 3
+```
+
+Each imported movie backdrop is inserted into the dedicated `GuessMovie` pool and, by default, also into mixed `GuessImage`. Disable the mixed copy with `--also-mixed false`.
+
+Import TV shows:
+
+```powershell
+dotnet run --project src\Lumo.Importers.Tmdb\Lumo.Importers.Tmdb.csproj -- `
+  --type tv `
+  --language zh-CN `
+  --pages 5
+```
+
+Import variety/reality/talk shows:
+
+```powershell
+dotnet run --project src\Lumo.Importers.Tmdb\Lumo.Importers.Tmdb.csproj -- `
+  --type variety `
+  --language zh-CN `
+  --pages 5
+```
+
+Useful filters:
+
+```text
+--pool all|popular|normal|obscure
+--page-start 1
+--max-titles 100
+--images-per-title 2
+--difficulty auto|1..10
+--original-language zh|en|ja|ko
+--year-from 1990
+--year-to 2026
+--min-votes 20
+--max-votes 0
+--sort popularity.desc
+```
+
+`--pool obscure` sorts toward low-popularity results while still requiring a small vote floor; use `--page-start`, vote filters and language/year filters to tune exactly how deep the cold-title pool should go. Difficulty defaults to `auto`, based on TMDB popularity and vote count, and can be overridden with a fixed value.
+
+The importer deliberately prefers `backdrops` over posters so the title is less likely to be visible in the quiz image. It stores localized title, original title, release/air date, original language, popularity, vote count, overview and the TMDB id as metadata. Original and localized titles are accepted as aliases.
+
+TMDB requires attribution for developer API use. Lumo stores TMDB source metadata, but your deployed application must also follow TMDB's current branding/attribution requirements. Their required notice currently includes:
+
+> This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+TMDB's developer API is for non-commercial use with attribution; commercial use requires the appropriate TMDB license. TMDB also states that it does not claim ownership of third-party images in its API, so image/content rights still need to be considered for your deployment.
+
+Offline TMDB importer self-test:
+
+```powershell
+dotnet run --project src\Lumo.Importers.Tmdb\Lumo.Importers.Tmdb.csproj -- self-test
+```
+
+This does not require an API token and is run by GitHub Actions.
+
 ## Generic manifest
 
 For movies, TV shows, variety shows, people, games, custom image packs and any other source, use the generic manifest importer.
