@@ -29,6 +29,9 @@ jobs:
       - name: Test catalog importer
         run: dotnet run --project src/Lumo.Importers/Lumo.Importers.csproj --configuration Release --no-build -- self-test
 
+      - name: Test TMDB importer
+        run: dotnet run --project src/Lumo.Importers.Tmdb/Lumo.Importers.Tmdb.csproj --configuration Release --no-build -- self-test
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
