@@ -26,6 +26,9 @@ jobs:
       - name: Build
         run: dotnet build LumoBot.sln --configuration Release --no-restore
 
+      - name: Test catalog importer
+        run: dotnet run --project src/Lumo.Importers/Lumo.Importers.csproj --configuration Release --no-build -- self-test
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
