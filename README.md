@@ -6,7 +6,7 @@ Lumo is a cross-platform group entertainment and quiz bot. Telegram and WeChat s
 
 Implemented now:
 
-- 🎵 Guess Song (`/guesssong`) — engine and audio delivery are ready; import licensed/open audio to populate the song pool.
+- 🎵 Guess Song (`/guesssong`) with local audio-file delivery on Telegram and WeChat
 - 🎬 Guess Movie (`/guessmovie`)
 - 🖼️ Mixed Guess Image (`/guessimage`)
 - 🀄 Guess Idiom (`/guessidiom`)
@@ -15,10 +15,15 @@ Implemented now:
 - 🏁 First-correct-answer wins under concurrent replies
 - 🔤 Answer aliases and Unicode-normalized matching
 - 💾 SQLite catalog, tags, attribution metadata and score persistence
+- 🔁 Idempotent catalog imports through stable `ExternalKey` values
+- 📚 Bulk idiom JSON importer
+- 🎵 Local music-library scanner using ffprobe + FFmpeg; multiple clips per song
+- 🌍 Wikidata + Wikimedia Commons image import presets for countries, cities and landmarks
+- 📦 Generic JSON/JSONL manifest importer for movies, TV, variety shows and custom datasets
 - ✈️ Telegram adapter
 - 💬 WeChat adapter through a Wechaty gateway
 
-Discord is intentionally postponed while the WeChat path is developed first.
+Discord is intentionally postponed while the WeChat path and content catalog are developed first.
 
 ## Architecture
 
@@ -33,6 +38,11 @@ future adapters ───────┘        ▼
                      ┌─────────┴─────────┐
                      ▼                   ▼
                   Catalog              Scores
+                     ▲                   │
+                     │                   │
+              Lumo.Importers             │
+        idioms / music / Wikidata        │
+        generic JSON/JSONL manifest      │
                      └─────────┬─────────┘
                                ▼
                              SQLite
@@ -45,6 +55,7 @@ The platform layer only translates messages and sends media. Game rules stay pla
 - .NET 10 SDK
 - Telegram: a BotFather token
 - WeChat: Node.js 20+ and a compatible Wechaty Puppet / Puppet Service token
+- Music importing: FFmpeg + ffprobe
 
 ## Run Telegram
 
@@ -85,6 +96,32 @@ $env:LUMO_DATABASE_PATH="D:\Lumo\data\lumo.db"
 
 By default the SQLite database is created at `data/lumo.db` relative to the process working directory. If Telegram and WeChat run on the same machine and should share scores/catalog data, point both at the same `LUMO_DATABASE_PATH`.
 
+## Build a real question catalog
+
+See [`docs/importers.md`](docs/importers.md) for the complete importer guide.
+
+Examples:
+
+```powershell
+# Scan a local music library and create 3 different 8-second clips per song
+dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- music `
+  --root "D:\Music" --clip-count 3 --duration 8 --tags "华语,冷门"
+
+# Import an idiom JSON dataset
+dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- idioms `
+  --input "D:\datasets\idioms.json" --license "MIT"
+
+# Add country/flag questions from Wikidata + Wikimedia Commons
+dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- wikidata `
+  --preset countries --limit 200
+
+# Import custom movie/TV/variety questions
+dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- manifest `
+  --input "examples\questions.sample.json"
+```
+
+Imported media can be a normal HTTP(S) URL or a local absolute file path. Telegram uploads local media directly; the Wechaty gateway uses `FileBox.fromFile` when it sees a local path.
+
 ## Commands
 
 ```text
@@ -101,27 +138,34 @@ Chinese text triggers are supported on both Telegram and WeChat: `猜歌`, `猜�
 
 ## Catalog design
 
-The MVP schema separates reusable entities from individual questions:
+The schema separates reusable entities from individual questions:
 
 - `Entities`: movie, city, landmark, idiom, song, show, person, etc.
-- `Questions`: game mode, prompt, answer, difficulty and media.
+- `Questions`: game mode, prompt, answer, difficulty, media and a stable import `ExternalKey`.
 - `QuestionAliases`: accepted alternate answers, English names and abbreviations.
 - `QuestionTags`: country, era, genre, difficulty pool and other filters.
 - media metadata: source URL and license/attribution fields.
 
-This lets importers attach many questions/media assets to the same movie, song or other entity without changing the game engine.
+This lets importers attach many questions/media assets to the same movie, song or other entity without changing the game engine. Re-importing the same external key updates the existing question instead of creating duplicates.
 
 ## Personal WeChat note
 
 Personal WeChat automation is not an official Telegram-style Bot API. Lumo deliberately isolates the protocol provider behind Wechaty so Paimon, PadLocal or another compatible Puppet Service can be swapped without rewriting the game engine. Provider stability, supported media types and account-risk profile can differ, so evaluate the selected provider with a dedicated test account before long-running deployment.
 
+## Data-source notes
+
+Wikidata Query Service is used for structured entities and Wikimedia Commons `imageinfo/extmetadata` is used to capture image source/license metadata. Commons license metadata should still be reviewed before public deployment.
+
+For music, Lumo does not fetch commercial recordings from MusicBrainz or streaming sites. The importer works from audio files you provide and have the right to use. MusicBrainz can later be added as optional metadata enrichment rather than as an audio source.
+
 ## Roadmap
 
 1. Telegram MVP and reusable game engine ✅
 2. WeChat adapter / Wechaty gateway ✅ initial version
-3. Idiom-chain mode
-4. Bulk importers for idioms, Wikidata/Wikimedia/Openverse and local licensed music libraries
-5. Improve WeChat media delivery and deployment
-6. Redis-backed distributed game sessions
-7. Admin UI and bulk review workflow
-8. Discord adapter (later)
+3. Bulk catalog import core ✅
+4. Idiom-chain mode
+5. Dedicated movie / TV / variety-show API importers
+6. Better difficulty/popularity weighting and anti-repeat scheduling
+7. Redis-backed distributed game sessions
+8. Admin UI and bulk review workflow
+9. Discord adapter (later)
