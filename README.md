@@ -1,6 +1,6 @@
 # LumoBot
 
-Lumo is a cross-platform group entertainment and quiz bot. The same game engine is designed to serve Telegram, Discord and, later, WeChat adapters.
+Lumo is a cross-platform group entertainment and quiz bot. Telegram and WeChat share the same game engine, question catalog, answer matching and score system.
 
 ## Current MVP
 
@@ -15,65 +15,75 @@ Implemented now:
 - 🏁 First-correct-answer wins under concurrent replies
 - 🔤 Answer aliases and Unicode-normalized matching
 - 💾 SQLite catalog, tags, attribution metadata and score persistence
+- ✈️ Telegram adapter
+- 💬 WeChat adapter through a Wechaty gateway
 
-Planned next: idiom chain, bulk importers, Discord, Redis-backed sessions, admin UI and WeChat.
+Discord is intentionally postponed while the WeChat path is developed first.
 
 ## Architecture
 
 ```text
-Telegram / Discord / WeChat
-          │
-          ▼
-      Chat Adapter
-          │
-          ▼
-      Lumo.Games
-  GameEngine + matching
-          │
-          ▼
-   Lumo.Application
-       contracts
-          │
-    ┌─────┴─────┐
-    ▼           ▼
-Catalog       Scores
-    │           │
-    └─────┬─────┘
-          ▼
- Lumo.Infrastructure
-        SQLite
+Telegram ───────────────┐
+                       │
+WeChat ─ Wechaty ─ HTTP┼──► ChatGameService
+                       │        │
+future adapters ───────┘        ▼
+                           GameEngine
+                               │
+                     ┌─────────┴─────────┐
+                     ▼                   ▼
+                  Catalog              Scores
+                     └─────────┬─────────┘
+                               ▼
+                             SQLite
 ```
 
-The platform layer only translates messages and sends media. Game rules, answer matching, question catalog and score logic stay platform-independent.
+The platform layer only translates messages and sends media. Game rules stay platform-independent.
 
 ## Requirements
 
 - .NET 10 SDK
-- A Telegram bot token from BotFather
+- Telegram: a BotFather token
+- WeChat: Node.js 20+ and a compatible Wechaty Puppet / Puppet Service token
 
-## Run the Telegram bot
+## Run Telegram
 
-Linux/macOS:
-
-```bash
-export LUMO_TELEGRAM_TOKEN="123456:your-token"
-dotnet run --project src/Lumo.Bot.Telegram/Lumo.Bot.Telegram.csproj
-```
-
-Windows PowerShell:
+PowerShell:
 
 ```powershell
 $env:LUMO_TELEGRAM_TOKEN="123456:your-token"
 dotnet run --project src/Lumo.Bot.Telegram/Lumo.Bot.Telegram.csproj
 ```
 
-Optional custom database location:
+## Run WeChat
+
+Start the .NET game backend:
+
+```powershell
+$env:LUMO_WECHAT_GATEWAY_TOKEN="replace-with-a-long-random-secret"
+dotnet run --project src/Lumo.Bot.WeChat/Lumo.Bot.WeChat.csproj
+```
+
+Then start the Wechaty protocol gateway:
+
+```powershell
+cd gateways\wechaty
+npm install
+$env:WECHATY_PUPPET="wechaty-puppet-service"
+$env:WECHATY_PUPPET_SERVICE_TOKEN="your-puppet-service-token"
+$env:LUMO_WECHAT_GATEWAY_TOKEN="replace-with-the-same-secret"
+npm start
+```
+
+See [`docs/wechat.md`](docs/wechat.md) for the full setup and Puppet notes.
+
+Optional shared database path:
 
 ```powershell
 $env:LUMO_DATABASE_PATH="D:\Lumo\data\lumo.db"
 ```
 
-By default the SQLite database is created at `data/lumo.db`. Sample idiom, movie and mixed-image questions are seeded on first run. The song engine intentionally starts without commercial recordings; add audio you have the right to redistribute.
+By default the SQLite database is created at `data/lumo.db` relative to the process working directory. If Telegram and WeChat run on the same machine and should share scores/catalog data, point both at the same `LUMO_DATABASE_PATH`.
 
 ## Commands
 
@@ -87,15 +97,11 @@ By default the SQLite database is created at `data/lumo.db`. Sample idiom, movie
 /stop         结束当前回合
 ```
 
-Chinese text triggers are also supported: `猜歌`, `猜电影`, `猜图`, `猜成语`, `金币`, `排行榜`, `结束游戏`.
-
-## Telegram group setup
-
-For natural group answers — users simply type the answer instead of replying with a command — disable Privacy Mode for the bot in BotFather or grant the bot the appropriate group access.
+Chinese text triggers are supported on both Telegram and WeChat: `猜歌`, `猜电影`, `猜图`, `猜成语`, `金币`, `排行榜`, `结束游戏`.
 
 ## Catalog design
 
-The MVP schema already separates reusable entities from individual questions:
+The MVP schema separates reusable entities from individual questions:
 
 - `Entities`: movie, city, landmark, idiom, song, show, person, etc.
 - `Questions`: game mode, prompt, answer, difficulty and media.
@@ -103,18 +109,19 @@ The MVP schema already separates reusable entities from individual questions:
 - `QuestionTags`: country, era, genre, difficulty pool and other filters.
 - media metadata: source URL and license/attribution fields.
 
-This lets a future importer attach many questions/media assets to the same movie, song or other entity without changing the game engine.
+This lets importers attach many questions/media assets to the same movie, song or other entity without changing the game engine.
 
-## Data and copyright
+## Personal WeChat note
 
-Lumo intentionally separates metadata from media assets. Keep source and license information for imported assets. Do not redistribute copyrighted movie screenshots, TV footage, variety-show frames, lyrics or commercial music recordings unless you have the necessary rights.
+Personal WeChat automation is not an official Telegram-style Bot API. Lumo deliberately isolates the protocol provider behind Wechaty so Paimon, PadLocal or another compatible Puppet Service can be swapped without rewriting the game engine. Provider stability, supported media types and account-risk profile can differ, so evaluate the selected provider with a dedicated test account before long-running deployment.
 
 ## Roadmap
 
-1. Telegram MVP and reusable game engine
-2. Idiom-chain mode
-3. Importers for idioms, Wikidata/Wikimedia/Openverse and local licensed music libraries
-4. Discord adapter
-5. Redis-backed distributed game sessions
-6. Admin UI and bulk review workflow
-7. WeChat adapter
+1. Telegram MVP and reusable game engine ✅
+2. WeChat adapter / Wechaty gateway ✅ initial version
+3. Idiom-chain mode
+4. Bulk importers for idioms, Wikidata/Wikimedia/Openverse and local licensed music libraries
+5. Improve WeChat media delivery and deployment
+6. Redis-backed distributed game sessions
+7. Admin UI and bulk review workflow
+8. Discord adapter (later)
