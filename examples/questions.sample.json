@@ -1,0 +1,41 @@
+[
+  {
+    "externalKey": "movie:sample:let-the-bullets-fly:scene:001",
+    "gameMode": "GuessMovie",
+    "entityType": "Movie",
+    "entityName": "让子弹飞",
+    "prompt": "🎬 猜电影：这是哪部电影？",
+    "answer": "让子弹飞",
+    "difficulty": 2,
+    "mediaKind": "Image",
+    "mediaUrl": "https://example.com/media/let-the-bullets-fly-001.jpg",
+    "sourceUrl": "https://example.com/source/001",
+    "license": "replace with the actual media license",
+    "aliases": [
+      "Let the Bullets Fly"
+    ],
+    "tags": [
+      "电影",
+      "华语",
+      "2010s"
+    ]
+  },
+  {
+    "externalKey": "variety:sample:show:001",
+    "gameMode": "GuessImage",
+    "entityType": "VarietyShow",
+    "entityName": "示例综艺",
+    "prompt": "🖼️ 猜图：这是哪个综艺节目？",
+    "answer": "示例综艺",
+    "difficulty": 3,
+    "mediaKind": "Image",
+    "mediaUrl": "https://example.com/media/show-001.jpg",
+    "sourceUrl": "https://example.com/source/show-001",
+    "license": "replace with the actual media license",
+    "aliases": [],
+    "tags": [
+      "综艺",
+      "娱乐"
+    ]
+  }
+]
