@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Lumo.Application;
 using Lumo.Domain;
 using Lumo.Infrastructure;
 
@@ -185,7 +184,7 @@ internal static class ImporterApp
                     probe.GetTag("albumartist"),
                     "未知歌手");
                 var album = probe.GetTag("album");
-                var year = FirstNonEmpty(probe.GetTag("date"), probe.GetTag("year"));
+                var year = FirstNonEmptyOrNull(probe.GetTag("date"), probe.GetTag("year"));
                 var genre = probe.GetTag("genre");
                 var entityName = $"{title} — {artist}";
                 var fingerprint = HashKey($"{artist}\n{title}\n{album}\n{probe.DurationSeconds:F3}");
@@ -206,13 +205,14 @@ internal static class ImporterApp
                     var clipPath = Path.Combine(clipRoot, $"{fingerprint}-{index + 1:00}.mp3");
                     await GenerateClipAsync(ffmpeg, file, clipPath, starts[index], clipDuration);
 
+                    var yearTag = !string.IsNullOrWhiteSpace(year) && year.Length >= 4 ? year[..4] : year;
                     var tags = BuildTags(
                         "音乐",
                         "歌曲",
                         artist,
                         album,
                         genre,
-                        string.IsNullOrWhiteSpace(year) ? null : year.Length >= 4 ? year[..4] : year,
+                        yearTag,
                         "本地音乐库")
                         .Concat(extraTags)
                         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -228,7 +228,7 @@ internal static class ImporterApp
                         difficulty,
                         MediaKind.Audio,
                         Path.GetFullPath(clipPath),
-                        new Uri(Path.GetFullPath(file)).AbsoluteUri,
+                        Path.GetFullPath(file),
                         options.Get("license") ?? "Local music library; operator must verify redistribution rights",
                         [$"{title} - {artist}", $"{title}—{artist}"],
                         tags,
@@ -536,13 +536,10 @@ internal static class ImporterApp
             _ => throw new ArgumentException("Unknown Wikidata preset. Use countries, cities, or landmarks.")
         };
 
-        return $"""
-            SELECT DISTINCT ?item ?itemLabel ?image WHERE {{
-              {where}
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "zh,en". }}
-            }}
-            LIMIT {limit}
-            """;
+        return "SELECT DISTINCT ?item ?itemLabel ?image WHERE {\n" +
+               "  " + where + "\n" +
+               "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"zh,en\". }\n" +
+               "}\nLIMIT " + limit.ToString(CultureInfo.InvariantCulture);
     }
 
     private static WikidataPreset GetWikidataPreset(string preset)
@@ -565,7 +562,7 @@ internal static class ImporterApp
         }
 
         var api = "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2" +
-                  "&prop=imageinfo&iiprop=url%7Cextmetadata" +
+                  "&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=1200" +
                   "&iiextmetadatafilter=LicenseShortName%7CLicenseUrl%7CArtist%7CCredit" +
                   "&titles=" + Uri.EscapeDataString("File:" + fileName);
         using var response = await http.GetAsync(api);
@@ -584,7 +581,9 @@ internal static class ImporterApp
         }
 
         var info = infos[0];
-        var mediaUrl = info.TryGetProperty("url", out var url) ? url.GetString() : imageUrl;
+        var mediaUrl = info.TryGetProperty("thumburl", out var thumbUrl)
+            ? thumbUrl.GetString()
+            : info.TryGetProperty("url", out var url) ? url.GetString() : imageUrl;
         var sourceUrl = info.TryGetProperty("descriptionurl", out var description) ? description.GetString() : null;
         string? license = null;
         string? artist = null;
@@ -690,6 +689,9 @@ internal static class ImporterApp
 
     private static string FirstNonEmpty(params string?[] values)
         => values.First(value => !string.IsNullOrWhiteSpace(value))!.Trim();
+
+    private static string? FirstNonEmptyOrNull(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static string HashKey(string value)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..24];
