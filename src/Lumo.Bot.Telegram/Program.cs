@@ -30,9 +30,11 @@ ILumoStore store = new SqliteLumoStore(databasePath);
 await store.InitializeAsync(cancellation.Token);
 var selectionOptions = QuestionSelectionOptions.FromEnvironment();
 var questionSource = new SqliteQuestionCandidateSource(databasePath);
+var idiomSource = new SqliteIdiomSource(databasePath);
 var gameService = new ChatGameService(
     new GameEngine(store, questionSource, selectionOptions),
-    store);
+    store,
+    new IdiomChainEngine(store, idiomSource));
 
 using var httpClient = new HttpClient();
 var telegram = new TelegramApiClient(token, httpClient);
