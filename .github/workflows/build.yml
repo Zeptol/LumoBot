@@ -31,5 +31,13 @@ jobs:
         with:
           node-version: '20.x'
 
+      - name: Install Wechaty gateway dependencies
+        working-directory: gateways/wechaty
+        run: npm install --ignore-scripts --no-audit --no-fund
+
       - name: Check Wechaty gateway syntax
         run: npm run --prefix gateways/wechaty check
+
+      - name: Smoke test Wechaty imports
+        working-directory: gateways/wechaty
+        run: node --input-type=module -e "import { WechatyBuilder, FileBox } from 'wechaty'; if (!WechatyBuilder || !FileBox) process.exit(1)"
