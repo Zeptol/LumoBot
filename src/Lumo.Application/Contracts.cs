@@ -10,6 +10,14 @@ public interface ILumoStore
         GameMode gameMode,
         CancellationToken cancellationToken = default);
 
+    Task<long> UpsertQuestionAsync(
+        CatalogQuestionInput input,
+        CancellationToken cancellationToken = default);
+
+    Task<long> GetQuestionCountAsync(
+        GameMode? gameMode = null,
+        CancellationToken cancellationToken = default);
+
     Task<Score> AddCorrectAnswerAsync(
         ChatIdentity player,
         int rewardCoins,
