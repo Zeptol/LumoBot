@@ -19,6 +19,7 @@ Implemented now:
 - 📚 Bulk idiom JSON importer
 - 🎵 Local music-library scanner using ffprobe + FFmpeg; multiple clips per song
 - 🌍 Wikidata + Wikimedia Commons image import presets for countries, cities and landmarks
+- 🎞️ TMDB importer for movies, TV and variety/reality/talk shows with multiple backdrops per title
 - 📦 Generic JSON/JSONL manifest importer for movies, TV, variety shows and custom datasets
 - ✈️ Telegram adapter
 - 💬 WeChat adapter through a Wechaty gateway
@@ -42,7 +43,7 @@ future adapters ───────┘        ▼
                      │                   │
               Lumo.Importers             │
         idioms / music / Wikidata        │
-        generic JSON/JSONL manifest      │
+      TMDB / generic JSON manifests      │
                      └─────────┬─────────┘
                                ▼
                              SQLite
@@ -56,6 +57,7 @@ The platform layer only translates messages and sends media. Game rules stay pla
 - Telegram: a BotFather token
 - WeChat: Node.js 20+ and a compatible Wechaty Puppet / Puppet Service token
 - Music importing: FFmpeg + ffprobe
+- TMDB importing: a TMDB API Read Access Token
 
 ## Run Telegram
 
@@ -115,6 +117,11 @@ dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- idioms `
 dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- wikidata `
   --preset countries --limit 200
 
+# Import TMDB movies into GuessMovie and mixed GuessImage
+$env:TMDB_BEARER_TOKEN="your TMDB API Read Access Token"
+dotnet run --project src\Lumo.Importers.Tmdb\Lumo.Importers.Tmdb.csproj -- `
+  --type movie --language zh-CN --pages 5 --images-per-title 3
+
 # Import custom movie/TV/variety questions
 dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- manifest `
   --input "examples\questions.sample.json"
@@ -158,13 +165,15 @@ Wikidata Query Service is used for structured entities and Wikimedia Commons `im
 
 For music, Lumo does not fetch commercial recordings from MusicBrainz or streaming sites. The importer works from audio files you provide and have the right to use. MusicBrainz can later be added as optional metadata enrichment rather than as an audio source.
 
+TMDB imports movie/TV metadata and backdrops. TMDB requires attribution for developer API use, including the notice: `This product uses the TMDB API but is not endorsed or certified by TMDB.` See `docs/importers.md` for details. Third-party image rights still need to be considered for the way you deploy the bot.
+
 ## Roadmap
 
 1. Telegram MVP and reusable game engine ✅
 2. WeChat adapter / Wechaty gateway ✅ initial version
 3. Bulk catalog import core ✅
-4. Idiom-chain mode
-5. Dedicated movie / TV / variety-show API importers
+4. TMDB movie / TV / variety importer ✅ initial version
+5. Idiom-chain mode
 6. Better difficulty/popularity weighting and anti-repeat scheduling
 7. Redis-backed distributed game sessions
 8. Admin UI and bulk review workflow
