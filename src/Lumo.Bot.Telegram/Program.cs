@@ -28,12 +28,17 @@ Console.CancelKeyPress += (_, eventArgs) =>
 
 ILumoStore store = new SqliteLumoStore(databasePath);
 await store.InitializeAsync(cancellation.Token);
-var gameService = new ChatGameService(new GameEngine(store), store);
+var selectionOptions = QuestionSelectionOptions.FromEnvironment();
+var questionSource = new SqliteQuestionCandidateSource(databasePath);
+var gameService = new ChatGameService(
+    new GameEngine(store, questionSource, selectionOptions),
+    store);
 
 using var httpClient = new HttpClient();
 var telegram = new TelegramApiClient(token, httpClient);
 
 Console.WriteLine($"Lumo Telegram bot started. Database: {Path.GetFullPath(databasePath)}");
+Console.WriteLine($"Question selection: candidates={selectionOptions.CandidatePoolSize}, recentQuestions={selectionOptions.RecentQuestionLimit}, recentEntities={selectionOptions.RecentEntityLimit}");
 
 long offset = 0;
 while (!cancellation.IsCancellationRequested)
