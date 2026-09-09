@@ -1,5 +1,6 @@
 import qrcodeTerminal from 'qrcode-terminal'
-import { FileBox, WechatyBuilder } from 'wechaty'
+import { FileBox } from 'file-box'
+import { WechatyBuilder } from 'wechaty'
 
 const backendUrl = (process.env.LUMO_WECHAT_BACKEND_URL || 'http://127.0.0.1:5080').replace(/\/$/, '')
 const gatewayToken = process.env.LUMO_WECHAT_GATEWAY_TOKEN || ''
