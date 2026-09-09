@@ -40,4 +40,4 @@ jobs:
 
       - name: Smoke test Wechaty imports
         working-directory: gateways/wechaty
-        run: node --input-type=module -e "import { WechatyBuilder, FileBox } from 'wechaty'; if (!WechatyBuilder || !FileBox) process.exit(1)"
+        run: node --input-type=module -e "import { WechatyBuilder } from 'wechaty'; import { FileBox } from 'file-box'; if (!WechatyBuilder || !FileBox) process.exit(1)"
