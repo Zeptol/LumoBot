@@ -28,9 +28,11 @@ ILumoStore store = new SqliteLumoStore(databasePath);
 await store.InitializeAsync();
 var selectionOptions = QuestionSelectionOptions.FromEnvironment();
 var questionSource = new SqliteQuestionCandidateSource(databasePath);
+var idiomSource = new SqliteIdiomSource(databasePath);
 var gameService = new ChatGameService(
     new GameEngine(store, questionSource, selectionOptions),
-    store);
+    store,
+    new IdiomChainEngine(store, idiomSource));
 
 var app = builder.Build();
 
