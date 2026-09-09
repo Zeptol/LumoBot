@@ -14,6 +14,8 @@ Implemented now:
 - ⏱️ Per-chat 30-second rounds
 - 🏁 First-correct-answer wins under concurrent replies
 - 🔤 Answer aliases and Unicode-normalized matching
+- 🎲 Weighted hot/mainstream/medium/obscure/rare/extreme question selection
+- 🔁 Per-chat anti-repeat history for both question IDs and underlying entities
 - 💾 SQLite catalog, tags, attribution metadata and score persistence
 - 🔁 Idempotent catalog imports through stable `ExternalKey` values
 - 📚 Bulk idiom JSON importer
@@ -35,6 +37,9 @@ WeChat ─ Wechaty ─ HTTP┼──► ChatGameService
                        │        │
 future adapters ───────┘        ▼
                            GameEngine
+                               │
+                      QuestionSelector
+                    weights + anti-repeat
                                │
                      ┌─────────┴─────────┐
                      ▼                   ▼
@@ -129,6 +134,40 @@ dotnet run --project src\Lumo.Importers\Lumo.Importers.csproj -- manifest `
 
 Imported media can be a normal HTTP(S) URL or a local absolute file path. Telegram uploads local media directly; the Wechaty gateway uses `FileBox.fromFile` when it sees a local path.
 
+## Question mix and anti-repeat
+
+Each chat keeps its own recent history. By default Lumo avoids the last 40 exact questions and the last 12 underlying entities. Entity-level history means that after one backdrop from a movie is shown, another backdrop from the same movie is also suppressed for a while, even across different game modes in that chat.
+
+The default mix is:
+
+```text
+20% popular
+30% mainstream
+25% medium
+15% obscure
+ 8% rare
+ 2% extreme / hell mode
+```
+
+If a bucket has no eligible questions its weight is automatically redistributed across the buckets that do have candidates. Tags such as `热门`, `普通`, `冷门`, `极冷门`, `地狱级` take precedence; otherwise Lumo falls back to the numeric question difficulty.
+
+All selection settings are runtime environment variables:
+
+```powershell
+$env:LUMO_CANDIDATE_POOL="96"
+$env:LUMO_RECENT_QUESTIONS="40"
+$env:LUMO_RECENT_ENTITIES="12"
+
+$env:LUMO_WEIGHT_POPULAR="20"
+$env:LUMO_WEIGHT_MAINSTREAM="30"
+$env:LUMO_WEIGHT_MEDIUM="25"
+$env:LUMO_WEIGHT_OBSCURE="15"
+$env:LUMO_WEIGHT_RARE="8"
+$env:LUMO_WEIGHT_EXTREME="2"
+```
+
+The SQLite candidate reader samples several ID windows instead of sorting an entire large question table with `ORDER BY RANDOM()`, so selection remains practical as the catalog grows.
+
 ## Commands
 
 ```text
@@ -173,8 +212,8 @@ TMDB imports movie/TV metadata and backdrops. TMDB requires attribution for deve
 2. WeChat adapter / Wechaty gateway ✅ initial version
 3. Bulk catalog import core ✅
 4. TMDB movie / TV / variety importer ✅ initial version
-5. Idiom-chain mode
-6. Better difficulty/popularity weighting and anti-repeat scheduling
+5. Weighted difficulty/popularity selection + anti-repeat ✅
+6. Idiom-chain mode
 7. Redis-backed distributed game sessions
 8. Admin UI and bulk review workflow
 9. Discord adapter (later)
