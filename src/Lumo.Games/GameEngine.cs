@@ -9,13 +9,23 @@ namespace Lumo.Games;
 public sealed class GameEngine
 {
     private static readonly TimeSpan DefaultRoundDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan HistoryIdleLifetime = TimeSpan.FromHours(24);
 
     private readonly ILumoStore _store;
+    private readonly IQuestionCandidateSource? _questionSource;
+    private readonly QuestionSelectionOptions _selectionOptions;
     private readonly ConcurrentDictionary<string, GameSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, RecentSelectionHistory> _histories = new(StringComparer.Ordinal);
+    private long _startCount;
 
-    public GameEngine(ILumoStore store)
+    public GameEngine(
+        ILumoStore store,
+        IQuestionCandidateSource? questionSource = null,
+        QuestionSelectionOptions? selectionOptions = null)
     {
         _store = store;
+        _questionSource = questionSource;
+        _selectionOptions = selectionOptions ?? new QuestionSelectionOptions();
     }
 
     public async Task<GameStartResult?> StartAsync(
@@ -24,14 +34,35 @@ public sealed class GameEngine
         GameMode gameMode,
         CancellationToken cancellationToken = default)
     {
-        var question = await _store.GetRandomQuestionAsync(gameMode, cancellationToken);
+        Question? question;
+        var key = BuildSessionKey(platform, chatId);
+
+        if (_questionSource is null)
+        {
+            question = await _store.GetRandomQuestionAsync(gameMode, cancellationToken);
+        }
+        else
+        {
+            var candidates = await _questionSource.GetCandidatesAsync(
+                gameMode,
+                _selectionOptions.CandidatePoolSize,
+                cancellationToken);
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+
+            var history = _histories.GetOrAdd(key, static _ => new RecentSelectionHistory());
+            question = history.SelectAndRemember(candidates, _selectionOptions);
+            PruneHistoriesPeriodically();
+        }
+
         if (question is null)
         {
             return null;
         }
 
         var expiresAt = DateTimeOffset.UtcNow.Add(DefaultRoundDuration);
-        var key = BuildSessionKey(platform, chatId);
         _sessions[key] = new GameSession(question, expiresAt);
 
         return new GameStartResult(question, expiresAt);
@@ -81,6 +112,24 @@ public sealed class GameEngine
         return _sessions.TryRemove(BuildSessionKey(platform, chatId), out _);
     }
 
+    private void PruneHistoriesPeriodically()
+    {
+        var startCount = Interlocked.Increment(ref _startCount);
+        if (startCount % 128 != 0 || _histories.Count < 128)
+        {
+            return;
+        }
+
+        var cutoff = DateTimeOffset.UtcNow - HistoryIdleLifetime;
+        foreach (var pair in _histories)
+        {
+            if (pair.Value.LastUsedAt < cutoff)
+            {
+                _histories.TryRemove(pair.Key, out _);
+            }
+        }
+    }
+
     private static string BuildSessionKey(string platform, string chatId)
         => $"{platform.Trim().ToLowerInvariant()}:{chatId.Trim()}";
 
@@ -95,6 +144,83 @@ public sealed class GameEngine
         public Question Question { get; }
         public DateTimeOffset ExpiresAt { get; }
         public int Completed;
+    }
+
+    private sealed class RecentSelectionHistory
+    {
+        private readonly object _gate = new();
+        private readonly BoundedRecentSet<long> _questions = new();
+        private readonly BoundedRecentSet<long> _entities = new();
+        private DateTimeOffset _lastUsedAt = DateTimeOffset.UtcNow;
+
+        public DateTimeOffset LastUsedAt
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _lastUsedAt;
+                }
+            }
+        }
+
+        public Question SelectAndRemember(
+            IReadOnlyList<Question> candidates,
+            QuestionSelectionOptions options)
+        {
+            lock (_gate)
+            {
+                var selected = QuestionSelector.Select(
+                    candidates,
+                    _questions.Snapshot(),
+                    _entities.Snapshot(),
+                    options);
+
+                _questions.Add(selected.Id, options.RecentQuestionLimit);
+                if (selected.EntityId is { } entityId)
+                {
+                    _entities.Add(entityId, options.RecentEntityLimit);
+                }
+
+                _lastUsedAt = DateTimeOffset.UtcNow;
+                return selected;
+            }
+        }
+    }
+
+    private sealed class BoundedRecentSet<T> where T : notnull
+    {
+        private readonly Queue<T> _queue = new();
+        private readonly Dictionary<T, int> _counts = new();
+
+        public IReadOnlySet<T> Snapshot() => new HashSet<T>(_counts.Keys);
+
+        public void Add(T value, int limit)
+        {
+            if (limit <= 0)
+            {
+                _queue.Clear();
+                _counts.Clear();
+                return;
+            }
+
+            _queue.Enqueue(value);
+            _counts[value] = _counts.GetValueOrDefault(value) + 1;
+
+            while (_queue.Count > limit)
+            {
+                var expired = _queue.Dequeue();
+                var remaining = _counts[expired] - 1;
+                if (remaining <= 0)
+                {
+                    _counts.Remove(expired);
+                }
+                else
+                {
+                    _counts[expired] = remaining;
+                }
+            }
+        }
     }
 }
 
