@@ -31,6 +31,22 @@ public sealed record Question(
     IReadOnlyList<string> Aliases,
     IReadOnlyList<string> Tags);
 
+public sealed record CatalogQuestionInput(
+    string ExternalKey,
+    GameMode GameMode,
+    string EntityType,
+    string EntityName,
+    string Prompt,
+    string Answer,
+    int Difficulty,
+    MediaKind MediaKind,
+    string? MediaUrl,
+    string? SourceUrl,
+    string? License,
+    IReadOnlyCollection<string> Aliases,
+    IReadOnlyCollection<string> Tags,
+    string? EntityMetadataJson = null);
+
 public sealed record ChatIdentity(
     string Platform,
     string ChatId,
