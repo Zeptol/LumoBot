@@ -1,0 +1,19 @@
+{
+  "name": "lumo-wechaty-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wechaty gateway for LumoBot",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "check": "node --check index.mjs"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0",
+    "wechaty": "^1.20.2",
+    "wechaty-puppet-service": "^1.18.2"
+  }
+}
